@@ -32,14 +32,12 @@ interface Assignment {
   };
 }
 
-export default function HouseDetailPage({ params }: { params: Promise<{ id: string }> }) {
+// Extract the main UI into a Content component so useToast is inside ToastProvider
+function HouseDetailContent({ houseId }: { houseId: string }) {
   const router = useRouter();
   const supabase = createClient();
   const { toast } = useToast();
   
-  // Unwrap params using React.use
-  const { id: houseId } = React.use(params);
-
   const [house, setHouse] = React.useState<House | null>(null);
   const [assignments, setAssignments] = React.useState<Assignment[]>([]);
   const [allUsers, setAllUsers] = React.useState<User[]>([]);
@@ -130,120 +128,127 @@ export default function HouseDetailPage({ params }: { params: Promise<{ id: stri
   const assignableUsers = allUsers.filter(u => !assignedUserIds.includes(u.id));
 
   return (
-    <ToastProvider>
-      <div className="min-h-screen bg-slate-50 p-4 sm:p-8">
-        <div className="max-w-4xl mx-auto space-y-8">
-          
-          {/* Header */}
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="icon" onClick={() => router.push("/admin/houses")}>
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">
-                {isLoading ? "Loading..." : house?.name || "House Details"}
-              </h1>
-              <p className="text-slate-500 text-sm">
-                {house?.location ? `Location: ${house.location}` : "Manage house assignments"}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            
-            {/* Assign New Worker Form */}
-            <div className="md:col-span-1">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <UserPlus className="w-5 h-5 text-primary" /> Assign Worker
-                  </CardTitle>
-                  <CardDescription>Select a worker to assign to this house.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Select Worker</label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={selectedUserId}
-                      onChange={(e) => setSelectedUserId(e.target.value)}
-                      disabled={isLoading || isAssigning || assignableUsers.length === 0}
-                    >
-                      <option value="">-- Choose a worker --</option>
-                      {assignableUsers.map(user => (
-                        <option key={user.id} value={user.id}>
-                          {user.full_name} ({user.role.replace('_', ' ')})
-                        </option>
-                      ))}
-                    </select>
-                    {assignableUsers.length === 0 && !isLoading && (
-                      <p className="text-xs text-slate-500 mt-1">All active users are already assigned to this house.</p>
-                    )}
-                  </div>
-                  <Button 
-                    className="w-full" 
-                    onClick={handleAssign} 
-                    disabled={!selectedUserId || isAssigning}
-                  >
-                    {isAssigning ? "Assigning..." : "Assign Worker"}
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Assigned Workers List */}
-            <div className="md:col-span-2 space-y-4">
-              <h2 className="text-lg font-bold text-slate-800">Assigned Workers</h2>
-              
-              {isLoading ? (
-                <div className="p-8 text-center text-slate-500 border border-slate-200 rounded-xl bg-white">
-                  Loading assignments...
-                </div>
-              ) : assignments.length === 0 ? (
-                <div className="p-8 text-center text-slate-500 border border-slate-200 rounded-xl bg-white">
-                  <ShieldAlert className="w-8 h-8 mx-auto text-slate-300 mb-3" />
-                  <p>No workers are currently assigned to this house.</p>
-                </div>
-              ) : (
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50 text-slate-600 font-medium border-b border-slate-200">
-                      <tr>
-                        <th className="px-4 py-3">Worker Name</th>
-                        <th className="px-4 py-3">Role</th>
-                        <th className="px-4 py-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {assignments.map((assignment) => (
-                        <tr key={assignment.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-slate-900">
-                            {assignment.users?.full_name || "Unknown User"}
-                          </td>
-                          <td className="px-4 py-3 text-slate-500 capitalize">
-                            {assignment.users?.role?.replace('_', ' ') || "Unknown"}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 px-2"
-                              onClick={() => handleRemove(assignment.id, assignment.users?.full_name)}
-                            >
-                              <UserMinus className="w-4 h-4 mr-1.5" /> Remove
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-8">
+      <div className="max-w-4xl mx-auto space-y-8">
+        
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.push("/admin/houses")}>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">
+              {isLoading ? "Loading..." : house?.name || "House Details"}
+            </h1>
+            <p className="text-slate-500 text-sm">
+              {house?.location ? `Location: ${house.location}` : "Manage house assignments"}
+            </p>
           </div>
         </div>
+
+        <div className="grid md:grid-cols-3 gap-8">
+          
+          {/* Assign New Worker Form */}
+          <div className="md:col-span-1">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-primary" /> Assign Worker
+                </CardTitle>
+                <CardDescription>Select a worker to assign to this house.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Select Worker</label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    disabled={isLoading || isAssigning || assignableUsers.length === 0}
+                  >
+                    <option value="">-- Choose a worker --</option>
+                    {assignableUsers.map(user => (
+                      <option key={user.id} value={user.id}>
+                        {user.full_name} ({user.role.replace('_', ' ')})
+                      </option>
+                    ))}
+                  </select>
+                  {assignableUsers.length === 0 && !isLoading && (
+                    <p className="text-xs text-slate-500 mt-1">All active users are already assigned to this house.</p>
+                  )}
+                </div>
+                <Button 
+                  className="w-full" 
+                  onClick={handleAssign} 
+                  disabled={!selectedUserId || isAssigning}
+                >
+                  {isAssigning ? "Assigning..." : "Assign Worker"}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Assigned Workers List */}
+          <div className="md:col-span-2 space-y-4">
+            <h2 className="text-lg font-bold text-slate-800">Assigned Workers</h2>
+            
+            {isLoading ? (
+              <div className="p-8 text-center text-slate-500 border border-slate-200 rounded-xl bg-white">
+                Loading assignments...
+              </div>
+            ) : assignments.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 border border-slate-200 rounded-xl bg-white">
+                <ShieldAlert className="w-8 h-8 mx-auto text-slate-300 mb-3" />
+                <p>No workers are currently assigned to this house.</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-50 text-slate-600 font-medium border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Worker Name</th>
+                      <th className="px-4 py-3">Role</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {assignments.map((assignment) => (
+                      <tr key={assignment.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-slate-900">
+                          {assignment.users?.full_name || "Unknown User"}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 capitalize">
+                          {assignment.users?.role?.replace('_', ' ') || "Unknown"}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 px-2"
+                            onClick={() => handleRemove(assignment.id, assignment.users?.full_name)}
+                          >
+                            <UserMinus className="w-4 h-4 mr-1.5" /> Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
+    </div>
+  );
+}
+
+export default function HouseDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params);
+  return (
+    <ToastProvider>
+      <HouseDetailContent houseId={id} />
     </ToastProvider>
   );
 }
