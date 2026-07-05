@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ToastProvider, useToast } from "@/components/ui/toast";
-import { ArrowLeft, Home, MapPin, Plus } from "lucide-react";
+import { ArrowLeft, Home, MapPin, Plus, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 interface House {
   id: string;
@@ -147,11 +148,17 @@ function AdminHousesContent() {
                         {house.location || "No location specified"}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-xs font-medium text-slate-700">
+                    <CardContent className="flex flex-col gap-4">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-xs font-medium text-slate-700 w-fit">
                         <span className={`w-1.5 h-1.5 rounded-full ${house.status === 'active' ? 'bg-green-500' : 'bg-slate-400'}`} />
                         {house.status.charAt(0).toUpperCase() + house.status.slice(1)}
                       </div>
+                      <Button asChild className="w-full justify-between group" variant="outline">
+                        <Link href={`/admin/houses/${house.id}`}>
+                          Manage Assignments
+                          <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                        </Link>
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}
