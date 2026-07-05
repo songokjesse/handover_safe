@@ -8,7 +8,7 @@ import * as z from "zod";
 import { createClient } from "@/utils/supabase/client";
 import { createHouse } from "@/app/actions/houses";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ToastProvider, useToast } from "@/components/ui/toast";
@@ -153,12 +153,13 @@ function AdminHousesContent() {
                         <span className={`w-1.5 h-1.5 rounded-full ${house.status === 'active' ? 'bg-green-500' : 'bg-slate-400'}`} />
                         {house.status.charAt(0).toUpperCase() + house.status.slice(1)}
                       </div>
-                      <Button asChild className="w-full justify-between group" variant="outline">
-                        <Link href={`/admin/houses/${house.id}`}>
-                          Manage Assignments
-                          <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                        </Link>
-                      </Button>
+                      <Link 
+                        href={`/admin/houses/${house.id}`}
+                        className={buttonVariants({ variant: "outline", className: "w-full justify-between group" })}
+                      >
+                        Manage Assignments
+                        <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                      </Link>
                     </CardContent>
                   </Card>
                 ))}

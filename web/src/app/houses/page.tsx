@@ -2,7 +2,7 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { MapPin, ArrowRight } from "lucide-react";
 
 export default async function HousesPage() {
@@ -57,12 +57,13 @@ export default async function HousesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button asChild className="w-full justify-between group">
-                <Link href={`/shifts/new?houseId=${house.id}`}>
-                  Start Shift
-                  <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                </Link>
-              </Button>
+              <Link 
+                href={`/shifts/new?houseId=${house.id}`}
+                className={buttonVariants({ className: "w-full justify-between group" })}
+              >
+                Start Shift
+                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              </Link>
             </CardContent>
           </Card>
         ))}
