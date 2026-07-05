@@ -32,16 +32,31 @@ function DashboardContent() {
 
   const [templates, setTemplates] = React.useState<Template[]>([]);
   const [responses, setResponses] = React.useState<Record<string, ResponseState>>({});
+  const [userRole, setUserRole] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
 
   React.useEffect(() => {
     async function loadData() {
+      setIsLoading(true);
+
+      // Fetch user profile to get role
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("users")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+        if (profile) {
+          setUserRole(profile.role);
+        }
+      }
+
       if (!activeShift) {
         setIsLoading(false);
         return;
       }
-      setIsLoading(true);
 
       // Fetch templates
       const { data: templateData, error: templateError } = await supabase
@@ -180,13 +195,33 @@ function DashboardContent() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary mb-6">
               <CheckSquare className="w-8 h-8" />
             </div>
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Ready for your shift?</h1>
-            <p className="text-slate-500 mt-3 max-w-md mx-auto mb-8 text-lg">
-              You don't have an active shift right now. Select a house and start a shift to access your checklist.
-            </p>
-            <Button size="lg" onClick={() => router.push("/houses")} className="rounded-full px-8">
-              Start a Shift <ArrowRight className="ml-2 w-4 h-4" />
-            </Button>
+            
+            {userRole === "admin" || userRole === "manager" ? (
+              <>
+                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Admin & Management Console</h1>
+                <p className="text-slate-500 mt-3 max-w-md mx-auto mb-8 text-lg">
+                  Welcome to HandoverSafe. Access system settings, users, and house configurations.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Button size="lg" onClick={() => router.push("/admin/users")} className="rounded-full px-8">
+                    Manage Users <ArrowRight className="ml-2 w-4 h-4" />
+                  </Button>
+                  <Button size="lg" variant="outline" onClick={() => router.push("/houses")} className="rounded-full px-8">
+                    View Houses
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Ready for your shift?</h1>
+                <p className="text-slate-500 mt-3 max-w-md mx-auto mb-8 text-lg">
+                  You don't have an active shift right now. Select a house and start a shift to access your checklist.
+                </p>
+                <Button size="lg" onClick={() => router.push("/houses")} className="rounded-full px-8">
+                  Start a Shift <ArrowRight className="ml-2 w-4 h-4" />
+                </Button>
+              </>
+            )}
           </div>
         ) : isLoading ? (
           <div className="text-center py-12 text-slate-500">Loading checklist...</div>
