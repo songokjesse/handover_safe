@@ -1,4 +1,4 @@
-import { createServerClient } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { MapPin, ArrowRight } from "lucide-react";
 
 export default async function HousesPage() {
-  const supabase = await createServerClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
