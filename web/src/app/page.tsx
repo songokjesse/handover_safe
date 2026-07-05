@@ -206,8 +206,8 @@ function DashboardContent() {
                   <Button size="lg" onClick={() => router.push("/admin/users")} className="rounded-full px-8">
                     Manage Users <ArrowRight className="ml-2 w-4 h-4" />
                   </Button>
-                  <Button size="lg" variant="outline" onClick={() => router.push("/houses")} className="rounded-full px-8">
-                    View Houses
+                  <Button size="lg" variant="outline" onClick={() => router.push("/admin/houses")} className="rounded-full px-8">
+                    Manage Houses
                   </Button>
                 </div>
               </>
