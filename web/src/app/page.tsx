@@ -3,177 +3,242 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { useActiveShift } from "@/context/ActiveShiftContext";
+import { ChecklistItem, ChecklistStatus } from "@/components/ChecklistItem";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { ToastProvider, useToast } from "@/components/ui/toast";
+import { LogOut, ArrowRight, Save, CheckSquare } from "lucide-react";
 
-interface UserProfile {
+interface Template {
   id: string;
-  full_name: string;
-  email: string;
-  role: string;
-  status: string;
+  section: string;
+  item_name: string;
+  description: string;
+  is_required: boolean;
+  order_index: number;
+}
+
+interface ResponseState {
+  id?: string;
+  status: ChecklistStatus;
+  comment: string;
 }
 
 function DashboardContent() {
   const router = useRouter();
   const supabase = createClient();
   const { toast } = useToast();
-  const [profile, setProfile] = React.useState<UserProfile | null>(null);
+  const { activeShift, setActiveShift, isLoading: shiftLoading } = useActiveShift();
+
+  const [templates, setTemplates] = React.useState<Template[]>([]);
+  const [responses, setResponses] = React.useState<Record<string, ResponseState>>({});
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isSaving, setIsSaving] = React.useState(false);
 
   React.useEffect(() => {
-    async function loadProfile() {
-      setIsLoading(true);
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (user) {
-          const { data, error } = await supabase
-            .from("users")
-            .select("id, full_name, email, role, status")
-            .eq("id", user.id)
-            .single();
-
-          if (error) {
-            toast({
-              title: "Profile Load Failed",
-              description: error.message,
-              type: "destructive",
-            });
-          } else if (data) {
-            setProfile(data as UserProfile);
-          }
-        }
-      } catch {
-        toast({
-          title: "System Error",
-          description: "Failed to authenticate session.",
-          type: "destructive",
-        });
-      } finally {
+    async function loadData() {
+      if (!activeShift) {
         setIsLoading(false);
+        return;
       }
+      setIsLoading(true);
+
+      // Fetch templates
+      const { data: templateData, error: templateError } = await supabase
+        .from("checklist_templates")
+        .select("*")
+        .eq("status", "active")
+        .order("order_index");
+
+      if (templateError) {
+        toast({ title: "Error loading templates", description: templateError.message, type: "destructive" });
+      } else {
+        setTemplates(templateData || []);
+      }
+
+      // Fetch existing responses for this shift
+      const { data: responseData, error: responseError } = await supabase
+        .from("checklist_responses")
+        .select("*")
+        .eq("shift_id", activeShift.id);
+
+      if (responseError) {
+        toast({ title: "Error loading responses", description: responseError.message, type: "destructive" });
+      } else if (responseData) {
+        const responseMap: Record<string, ResponseState> = {};
+        responseData.forEach((r) => {
+          responseMap[r.checklist_template_id] = {
+            id: r.id,
+            status: r.status as ChecklistStatus,
+            comment: r.comment || "",
+          };
+        });
+        setResponses(responseMap);
+      }
+      setIsLoading(false);
     }
-    loadProfile();
-  }, [supabase, toast]);
+    loadData();
+  }, [activeShift, supabase, toast]);
+
+  const handleStatusChange = (templateId: string, status: ChecklistStatus) => {
+    setResponses((prev) => ({
+      ...prev,
+      [templateId]: {
+        ...prev[templateId],
+        status,
+        comment: status === "done" ? "" : prev[templateId]?.comment || "",
+      },
+    }));
+  };
+
+  const handleCommentChange = (templateId: string, comment: string) => {
+    setResponses((prev) => ({
+      ...prev,
+      [templateId]: { ...prev[templateId], comment },
+    }));
+  };
+
+  const handleSave = async () => {
+    if (!activeShift) return;
+
+    // Validate required fields
+    const missingRequired = templates.some(
+      (t) => t.is_required && (!responses[t.id]?.status || responses[t.id].status === null)
+    );
+    if (missingRequired) {
+      toast({ title: "Incomplete", description: "Please complete all required items.", type: "destructive" });
+      return;
+    }
+
+    const missingComments = Object.values(responses).some(
+      (r) => r.status === "not_done" && !r.comment.trim()
+    );
+    if (missingComments) {
+      toast({ title: "Missing Reason", description: "Please provide a reason for all 'Not Done' items.", type: "destructive" });
+      return;
+    }
+
+    setIsSaving(true);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const upsertData = Object.entries(responses)
+        .filter(([_, state]) => state.status !== null)
+        .map(([templateId, state]) => ({
+          ...(state.id ? { id: state.id } : {}), // include id if it exists (for update)
+          shift_id: activeShift.id,
+          checklist_template_id: templateId,
+          status: state.status,
+          comment: state.comment || null,
+          completed_by: user.id,
+        }));
+
+      if (upsertData.length > 0) {
+        const { error } = await supabase.from("checklist_responses").upsert(upsertData, { onConflict: "shift_id,checklist_template_id" });
+        if (error) throw error;
+      }
+
+      toast({ title: "Saved", description: "Checklist progress saved successfully.", type: "success" });
+    } catch (err: any) {
+      toast({ title: "Save Failed", description: err.message, type: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleLogout = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        toast({
-          title: "Logout Failed",
-          description: error.message,
-          type: "destructive",
-        });
-      } else {
-        toast({
-          title: "Logged Out",
-          description: "Successfully signed out of your session.",
-          type: "success",
-        });
-        router.refresh();
-        router.push("/login");
-      }
-    } catch {
-      toast({
-        title: "Logout Error",
-        description: "An unexpected error occurred during logout.",
-        type: "destructive",
-      });
-    }
+    await supabase.auth.signOut();
+    setActiveShift(null);
+    router.push("/login");
   };
 
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case "admin":
-        return "Administrator";
-      case "manager":
-        return "Manager";
-      case "team_leader":
-        return "Team Leader";
-      default:
-        return "Support Worker";
-    }
-  };
+  // Group templates by section
+  const sections = Array.from(new Set(templates.map((t) => t.section)));
+
+  if (shiftLoading) return <div className="p-8 text-center text-slate-500">Loading session...</div>;
 
   return (
-    <main className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-xl animate-in fade-in slide-in-from-bottom-5 duration-300">
-        <Card className="border-border">
-          <CardHeader className="text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 text-primary mb-4 select-none">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
-            </div>
-            <CardTitle className="text-3xl font-extrabold select-none">HandoverSafe</CardTitle>
-            <CardDescription className="select-none">Shift Verification & Accountability Dashboard</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-6 gap-2 text-muted-foreground select-none">
-                <div className="w-6 h-6 rounded-full border-3 border-muted border-t-primary animate-spin" />
-                <span>Loading active session profile...</span>
-              </div>
-            ) : profile ? (
-              <div className="space-y-4">
-                <div className="border border-border rounded-lg bg-card/50 p-4 space-y-3">
-                  <div className="flex justify-between border-b border-border/50 pb-2.5">
-                    <span className="text-sm text-muted-foreground select-none">Full Name</span>
-                    <span className="font-semibold text-foreground select-text">{profile.full_name}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-border/50 pb-2.5">
-                    <span className="text-sm text-muted-foreground select-none">Email Address</span>
-                    <span className="font-semibold text-foreground select-text">{profile.email}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-border/50 pb-2.5">
-                    <span className="text-sm text-muted-foreground select-none">System Role</span>
-                    <span className="font-semibold text-foreground select-none">{getRoleLabel(profile.role)}</span>
-                  </div>
-                  <div className="flex justify-between pb-1">
-                    <span className="text-sm text-muted-foreground select-none">Account Status</span>
-                    <span className="inline-flex items-center gap-1 font-semibold text-success select-none">
-                      <span className="w-2 h-2 rounded-full bg-success" />
-                      {profile.status}
-                    </span>
-                  </div>
-                </div>
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-primary font-bold text-xl">
+            <CheckSquare className="w-6 h-6" />
+            HandoverSafe
+          </div>
+          <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-500 hover:text-slate-800">
+            <LogOut className="w-4 h-4 mr-2" />
+            Sign Out
+          </Button>
+        </div>
+      </header>
 
-                <div className="flex flex-col gap-2">
-                  {profile.role === "admin" && (
-                    <Button onClick={() => router.push("/admin/users")} className="w-full">
-                      Go to Admin Console
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={handleLogout} className="w-full">
-                    Sign Out
-                  </Button>
+      <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
+        {!activeShift ? (
+          <div className="text-center py-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary mb-6">
+              <CheckSquare className="w-8 h-8" />
+            </div>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Ready for your shift?</h1>
+            <p className="text-slate-500 mt-3 max-w-md mx-auto mb-8 text-lg">
+              You don't have an active shift right now. Select a house and start a shift to access your checklist.
+            </p>
+            <Button size="lg" onClick={() => router.push("/houses")} className="rounded-full px-8">
+              Start a Shift <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+          </div>
+        ) : isLoading ? (
+          <div className="text-center py-12 text-slate-500">Loading checklist...</div>
+        ) : (
+          <div className="space-y-8 pb-20 animate-in fade-in duration-500">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Shift Checklist</h1>
+              <p className="text-slate-500 mt-2">
+                Shift: {activeShift.shift_type} • Started: {new Date(activeShift.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+
+            {sections.map((section) => (
+              <div key={section} className="space-y-4">
+                <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-2">{section}</h2>
+                <div className="space-y-4">
+                  {templates
+                    .filter((t) => t.section === section)
+                    .map((template) => (
+                      <ChecklistItem
+                        key={template.id}
+                        id={template.id}
+                        itemName={template.item_name}
+                        description={template.description}
+                        isRequired={template.is_required}
+                        status={responses[template.id]?.status || null}
+                        comment={responses[template.id]?.comment}
+                        onStatusChange={handleStatusChange}
+                        onCommentChange={handleCommentChange}
+                      />
+                    ))}
                 </div>
               </div>
-            ) : (
-              <div className="text-center py-6 text-muted-foreground select-none">
-                Session expired. Redirecting to login...
+            ))}
+
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 shadow-lg flex justify-center z-10">
+              <div className="max-w-4xl w-full flex justify-end">
+                <Button size="lg" onClick={handleSave} disabled={isSaving}>
+                  {isSaving ? (
+                    "Saving..."
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" /> Save Progress
+                    </>
+                  )}
+                </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </main>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
 
